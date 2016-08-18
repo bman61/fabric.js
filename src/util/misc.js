@@ -633,6 +633,20 @@
         alignX: alignX,
         alignY: alignY
       };
+    },
+
+    /**
+     * Clear char widths cache for a font family.
+     * @memberOf fabric.util
+     * @param {String} [fontFamily] font family to clear
+     */
+    clearFabricFontCache: function(fontFamily) {
+      if (!fontFamily) {
+        fabric.charWidthsCache = { };
+      }
+      else if (fabric.charWidthsCache[fontFamily]) {
+        delete fabric.charWidthsCache[fontFamily];
+      }
     }
   };
 

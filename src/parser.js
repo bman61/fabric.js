@@ -106,11 +106,11 @@
   function _setStrokeFillOpacity(attributes) {
     for (var attr in colorAttributes) {
 
-      if (typeof attributes[colorAttributes[attr]] === 'undefined') {
+      if (typeof attributes[colorAttributes[attr]] === 'undefined' || attributes[attr] === '') {
         continue;
       }
 
-      if (!attributes[attr]) {
+      if (typeof attributes[attr] === 'undefined') {
         if (!fabric.Object.prototype[attr]) {
           continue;
         }
@@ -125,6 +125,19 @@
       attributes[attr] = color.setAlpha(toFixed(color.getAlpha() * attributes[colorAttributes[attr]], 2)).toRgba();
     }
     return attributes;
+  }
+
+  /**
+   * @private
+   */
+  function _getMultipleNodes(doc, nodeNames) {
+    var nodeName, nodeArray = [ ], nodeList;
+    for (var i = 0; i < nodeNames.length; i++) {
+      nodeName = nodeNames[i];
+      nodeList = doc.getElementsByTagName(nodeName);
+      nodeArray = nodeArray.concat(Array.prototype.slice.call(nodeList));
+    }
+    return nodeArray;
   }
 
   /**
@@ -219,7 +232,7 @@
                     skewY +
                     ')',
 
-        transforms = '(?:' + transform + '(?:' + commaWsp + transform + ')*' + ')',
+        transforms = '(?:' + transform + '(?:' + commaWsp + '*' + transform + ')*' + ')',
 
         transformList = '^\\s*(?:' + transforms + '?)\\s*$',
 
@@ -406,7 +419,8 @@
    * @private
    */
   function parseUseDirectives(doc) {
-    var nodelist = doc.getElementsByTagName('use'), i = 0;
+    var nodelist = _getMultipleNodes(doc, ['use', 'svg:use']), i = 0;
+
     while (nodelist.length && i < nodelist.length) {
       var el = nodelist[i],
           xlink = el.getAttribute('xlink:href').substr(1),
@@ -482,7 +496,7 @@
         x = element.getAttribute('x') || 0,
         y = element.getAttribute('y') || 0,
         preserveAspectRatio = element.getAttribute('preserveAspectRatio') || '',
-        missingViewBox = (!viewBoxAttr || !reViewBoxTagNames.test(element.tagName)
+        missingViewBox = (!viewBoxAttr || !reViewBoxTagNames.test(element.nodeName)
                            || !(viewBoxAttr = viewBoxAttr.match(reViewBoxAttrValue))),
         missingDimAttr = (!widthAttr || !heightAttr || widthAttr === '100%' || heightAttr === '100%'),
         toBeParsed = missingViewBox && missingDimAttr,
@@ -540,7 +554,7 @@
                   (minX * scaleX) + ' ' +
                   (minY * scaleY) + ') ';
 
-    if (element.tagName === 'svg') {
+    if (element.nodeName === 'svg') {
       el = element.ownerDocument.createElement('g');
       while (element.firstChild != null) {
         el.appendChild(element.firstChild);
@@ -569,7 +583,8 @@
 
     function hasAncestorWithNodeName(element, nodeName) {
       while (element && (element = element.parentNode)) {
-        if (nodeName.test(element.nodeName) && !element.getAttribute('instantiated_by_use')) {
+        if (element.nodeName && nodeName.test(element.nodeName.replace('svg:', ''))
+          && !element.getAttribute('instantiated_by_use')) {
           return true;
         }
       }
@@ -603,7 +618,7 @@
 
       var elements = descendants.filter(function(el) {
         applyViewboxTransform(el);
-        return reAllowedSVGTagNames.test(el.tagName) &&
+        return reAllowedSVGTagNames.test(el.nodeName.replace('svg:', '')) &&
               !hasAncestorWithNodeName(el, reNotAllowedAncestors); // http://www.w3.org/TR/SVG/struct.html#DefsElement
       });
 
@@ -736,20 +751,16 @@
      * @return {Object} Gradient definitions; key corresponds to element id, value -- to gradient definition element
      */
     getGradientDefs: function(doc) {
-      var linearGradientEls = doc.getElementsByTagName('linearGradient'),
-          radialGradientEls = doc.getElementsByTagName('radialGradient'),
-          el, i, j = 0, id, xlink, elList = [ ],
+      var tagArray = [
+            'linearGradient',
+            'radialGradient',
+            'svg:linearGradient',
+            'svg:radialGradient'],
+          elList = _getMultipleNodes(doc, tagArray),
+          el, j = 0, id, xlink,
           gradientDefs = { }, idsToXlinkMap = { };
 
-      elList.length = linearGradientEls.length + radialGradientEls.length;
-      i = linearGradientEls.length;
-      while (i--) {
-        elList[j++] = linearGradientEls[i];
-      }
-      i = radialGradientEls.length;
-      while (i--) {
-        elList[j++] = radialGradientEls[i];
-      }
+      j = elList.length;
 
       while (j--) {
         el = elList[j];
@@ -910,7 +921,8 @@
 
       // very crude parsing of style contents
       for (var i = 0, len = styles.length; i < len; i++) {
-        var styleContents = styles[i].textContent;
+        // IE9 doesn't support textContent, but provides text instead.
+        var styleContents = styles[i].textContent || styles[i].text;
 
         // remove comments
         styleContents = styleContents.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -919,7 +931,6 @@
         }
         rules = styleContents.match(/[^{]*\{[\s\S]*?\}/g);
         rules = rules.map(function(rule) { return rule.trim(); });
-
         rules.forEach(function(rule) {
 
           var match = rule.match(/([\s\S]*?)\s*\{([^}]*)\}/),
@@ -938,7 +949,12 @@
             if (_rule === '') {
               return;
             }
-            allRules[_rule] = fabric.util.object.clone(ruleObj);
+            if (allRules[_rule]) {
+              fabric.util.object.extend(allRules[_rule], ruleObj);
+            }
+            else {
+              allRules[_rule] = fabric.util.object.clone(ruleObj);
+            }
           });
         });
       }
@@ -980,7 +996,7 @@
           xml.loadXML(r.responseText.replace(/<!DOCTYPE[\s\S]*?(\[[\s\S]*\])*?>/i, ''));
         }
         if (!xml || !xml.documentElement) {
-          return;
+          callback && callback(null);
         }
 
         fabric.parseSVGDocument(xml.documentElement, function (results, options) {
@@ -988,7 +1004,7 @@
             objects: fabric.util.array.invoke(results, 'toObject'),
             options: options
           });
-          callback(results, options);
+          callback && callback(results, options);
         }, reviver);
       }
     },
@@ -1022,24 +1038,47 @@
     },
 
     /**
-     * Creates markup containing SVG font faces
+     * Creates markup containing SVG font faces,
+     * font URLs for font faces must be collected by developers
+     * and are not extracted from the DOM by fabricjs
      * @param {Array} objects Array of fabric objects
      * @return {String}
      */
     createSVGFontFacesMarkup: function(objects) {
-      var markup = '';
+      var markup = '', fontList = { }, obj, fontFamily,
+          style, row, rowIndex, _char, charIndex,
+          fontPaths = fabric.fontPaths;
 
       for (var i = 0, len = objects.length; i < len; i++) {
-        if (objects[i].type !== 'text' || !objects[i].path) {
+        obj = objects[i];
+        fontFamily = obj.fontFamily;
+        if (obj.type.indexOf('text') === -1 || fontList[fontFamily] || !fontPaths[fontFamily]) {
           continue;
         }
+        fontList[fontFamily] = true;
+        if (!obj.styles) {
+          continue;
+        }
+        style = obj.styles;
+        for (rowIndex in style) {
+          row = style[rowIndex];
+          for (charIndex in row) {
+            _char = row[charIndex];
+            fontFamily = _char.fontFamily;
+            if (!fontList[fontFamily] && fontPaths[fontFamily]) {
+              fontList[fontFamily] = true;
+            }
+          }
+        }
+      }
 
+      for (var j in fontList) {
         markup += [
           //jscs:disable validateIndentation
-          '@font-face {',
-            'font-family: ', objects[i].fontFamily, '; ',
-            'src: url(\'', objects[i].path, '\')',
-          '}\n'
+          '\t\t@font-face {\n',
+            '\t\t\tfont-family: \'', j, '\';\n',
+            '\t\t\tsrc: url(\'', fontPaths[j], '\');\n',
+          '\t\t}\n'
           //jscs:enable validateIndentation
         ].join('');
       }
@@ -1048,7 +1087,7 @@
         markup = [
           //jscs:disable validateIndentation
           '\t<style type="text/css">',
-            '<![CDATA[',
+            '<![CDATA[\n',
               markup,
             ']]>',
           '</style>\n'

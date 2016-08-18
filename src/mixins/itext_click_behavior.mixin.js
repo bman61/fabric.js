@@ -93,17 +93,16 @@ fabric.util.object.extend(fabric.IText.prototype, /** @lends fabric.IText.protot
       this.__mousedownY = pointer.y;
       this.__isMousedown = true;
 
-      if (this.hiddenTextarea && this.canvas) {
-        this.canvas.wrapperEl.appendChild(this.hiddenTextarea);
-      }
-
       if (this.selected) {
         this.setCursorByClick(options.e);
       }
 
       if (this.isEditing) {
         this.__selectionStartOnMouseDown = this.selectionStart;
-        this.initDelayedCursor(true);
+        if (this.selectionStart === this.selectionEnd) {
+          this.abortCursorAnimation();
+        }
+        this.renderCursorOrSelection();
       }
     });
   },
@@ -129,8 +128,13 @@ fabric.util.object.extend(fabric.IText.prototype, /** @lends fabric.IText.protot
       }
 
       if (this.__lastSelected && !this.__corner) {
-        this.enterEditing();
-        this.initDelayedCursor(true);
+        this.enterEditing(options.e);
+        if (this.selectionStart === this.selectionEnd) {
+          this.initDelayedCursor(true);
+        }
+        else {
+          this.renderCursorOrSelection();
+        }
       }
       this.selected = true;
     });
@@ -145,17 +149,19 @@ fabric.util.object.extend(fabric.IText.prototype, /** @lends fabric.IText.protot
 
     if (e.shiftKey) {
       if (newSelectionStart < this.selectionStart) {
-        this.setSelectionEnd(this.selectionStart);
-        this.setSelectionStart(newSelectionStart);
+        this.selectionEnd = this.selectionStart;
+        this.selectionStart = newSelectionStart;
       }
       else {
-        this.setSelectionEnd(newSelectionStart);
+        this.selectionEnd = newSelectionStart;
       }
     }
     else {
-      this.setSelectionStart(newSelectionStart);
-      this.setSelectionEnd(newSelectionStart);
+      this.selectionStart = newSelectionStart;
+      this.selectionEnd = newSelectionStart;
     }
+    this._fireSelectionChanged();
+    this._updateTextarea();
   },
 
   /**

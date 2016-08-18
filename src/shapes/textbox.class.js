@@ -17,29 +17,44 @@
    * @see {@link fabric.Textbox#initialize} for constructor definition
    */
   fabric.Textbox = fabric.util.createClass(fabric.IText, fabric.Observable, {
+
     /**
      * Type of an object
      * @type String
      * @default
      */
     type: 'textbox',
+
     /**
      * Minimum width of textbox, in pixels.
      * @type Number
      * @default
      */
     minWidth: 20,
+
     /**
      * Minimum calculated width of a textbox, in pixels.
      * @type Number
      * @default
      */
     dynamicMinWidth: 0,
+
     /**
      * Cached array of text wrapping.
      * @type Array
      */
     __cachedLines: null,
+
+    /**
+     * Override standard Object class values
+     */
+    lockScalingY: true,
+
+    /**
+     * Override standard Object class values
+     */
+    lockScalingFlip: true,
+
     /**
      * Constructor. Some scaling related property values are forced. Visibility
      * of controls is also fixed; only the rotation and width controls are
@@ -50,14 +65,7 @@
      */
     initialize: function(text, options) {
       this.ctx = fabric.util.createCanvasElement().getContext('2d');
-
       this.callSuper('initialize', text, options);
-      this.set({
-        lockUniScaling: false,
-        lockScalingY: true,
-        lockScalingFlip: true,
-        hasBorders: true
-      });
       this.setControlsVisibility(fabric.Textbox.getTextboxControlVisibility());
 
       // add width to this list of props that effect line wrapping.
@@ -86,7 +94,6 @@
 
       // wrap lines
       this._textLines = this._splitTextIntoLines();
-
       // if after wrapping, the width is smaller than dynamicMinWidth, change the width and re-wrap
       if (this.dynamicMinWidth > this.width) {
         this._set('width', this.dynamicMinWidth);
@@ -236,11 +243,9 @@
     _measureText: function(ctx, text, lineIndex, charOffset) {
       var width = 0;
       charOffset = charOffset || 0;
-
       for (var i = 0, len = text.length; i < len; i++) {
         width += this._getWidthOfChar(ctx, text[i], lineIndex, i + charOffset);
       }
-
       return width;
     },
 
@@ -262,29 +267,36 @@
           infix            = ' ',
           wordWidth        = 0,
           infixWidth       = 0,
-          largestWordWidth = 0;
+          largestWordWidth = 0,
+          lineJustStarted = true,
+          additionalSpace = this._getWidthOfCharSpacing();
 
       for (var i = 0; i < words.length; i++) {
         word = words[i];
         wordWidth = this._measureText(ctx, word, lineIndex, offset);
+
         offset += word.length;
 
-        lineWidth += infixWidth + wordWidth;
+        lineWidth += infixWidth + wordWidth - additionalSpace;
 
-        if (lineWidth >= this.width && line !== '') {
+        if (lineWidth >= this.width && !lineJustStarted) {
           lines.push(line);
           line = '';
           lineWidth = wordWidth;
+          lineJustStarted = true;
+        }
+        else {
+          lineWidth += additionalSpace;
         }
 
-        if (line !== '' || i === 1) {
+        if (!lineJustStarted) {
           line += infix;
         }
         line += word;
 
-        infixWidth = this._measureText(ctx, infix, lineIndex, offset);
+        infixWidth = this._measureText(ctx, infix, lineIndex, offset) + additionalSpace;
         offset++;
-
+        lineJustStarted = false;
         // keep track of largest word
         if (wordWidth > largestWordWidth) {
           largestWordWidth = wordWidth;
@@ -294,12 +306,11 @@
       i && lines.push(line);
 
       if (largestWordWidth > this.dynamicMinWidth) {
-        this.dynamicMinWidth = largestWordWidth;
+        this.dynamicMinWidth = largestWordWidth - additionalSpace;
       }
 
       return lines;
     },
-
     /**
      * Gets lines of text to render in the Textbox. This function calculates
      * text wrapping on the fly everytime it is called.
@@ -454,11 +465,5 @@
       mtr: true
     };
   };
-  /**
-   * Contains all fabric.Textbox objects that have been created
-   * @static
-   * @memberOf fabric.Textbox
-   * @type Array
-   */
-  fabric.Textbox.instances = [];
+
 })(typeof exports !== 'undefined' ? exports : this);

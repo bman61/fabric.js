@@ -5,6 +5,7 @@ testrunner.options.log.tests = false;
 testrunner.options.log.assertions = false;
 
 testrunner.options.coverage = true;
+testrunner.options.maxBlockDuration = 120000;
 
 testrunner.run({
     deps: "./test/fixtures/test_script.js",
@@ -33,8 +34,13 @@ testrunner.run({
       './test/unit/pattern.js',
       './test/unit/shadow.js',
       './test/unit/object_interactivity.js',
-      './test/unit/object_origin.js',      
-      './test/unit/itext.js'
+      './test/unit/object_geometry.js',
+      './test/unit/object_origin.js',
+      './test/unit/itext.js',
+      './test/unit/itext_key_behaviour.js',
+      './test/unit/collection.js',
+      './test/unit/point.js',
+      './test/unit/intersection.js',
     ]
 }, function(err, report) {
   if (err) {
